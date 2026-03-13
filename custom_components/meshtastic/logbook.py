@@ -176,6 +176,10 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
                 to_channel_entity_id,
                 to_dm_entity_id,
                 message,
+                rx_snr,
+                rx_rssi,
+                hop_start, 
+                hop_limit
             )
 
     def extract_device_and_entity_from_channel(
