@@ -321,7 +321,7 @@ class MeshtasticApiClient:
                 "rx_snr": packet.rx_snr,
                 "rx_rssi": packet.rx_rssi,
                 "hop_start": packet.hop_start,
-                "hop_limit": packet.hop_limit
+                "hop_limit": packet.hop_limit,
             },
         )
 
