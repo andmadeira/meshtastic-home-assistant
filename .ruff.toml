@@ -20,6 +20,7 @@ ignore = [
     "D101", # Missing docstring (currently no distributed library)
     "D102", # Missing docstring (currently no distributed library)
     "D103", # Missing docstring (currently no distributed library)
+    "D104", # Missing docstring (currently no distributed library)
     "D105", # Missing docstring (currently no distributed library)
     "D107", # Missing docstring (currently no distributed library)
 ]

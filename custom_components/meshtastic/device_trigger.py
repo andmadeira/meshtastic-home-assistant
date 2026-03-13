@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+#
+# SPDX-License-Identifier: MIT
+
 import voluptuous as vol
 from homeassistant.components.device_automation import (
     DEVICE_TRIGGER_BASE_SCHEMA,

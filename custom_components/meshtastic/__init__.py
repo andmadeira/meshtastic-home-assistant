@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+#
+# SPDX-License-Identifier: MIT
+
 """
 Custom integration to integrate Meshtastic with Home Assistant.
 

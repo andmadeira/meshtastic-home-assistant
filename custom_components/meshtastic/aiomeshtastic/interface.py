@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+# SPDX-FileCopyrightText: 2025 Hendrik @novag
+#
+# SPDX-License-Identifier: MIT
+
 import asyncio
 import contextlib
 import datetime
@@ -12,7 +17,6 @@ from pathlib import Path
 from types import MappingProxyType, TracebackType
 from typing import (
     Any,
-    Optional,
     Self,
 )
 
@@ -414,7 +418,8 @@ class MeshInterface:
 
         # Parse broker address
         hostname = broker.split(":", 1)[0]
-        port = int(broker.split(":", 1)[1]) if ":" in broker else 1883
+        default_port = 8883 if use_tls else 1883
+        port = int(broker.split(":", 1)[1]) if ":" in broker else default_port
 
         # Get node ID for client identifier
         node_id = self._connected_node_info.my_node_num
@@ -1054,7 +1059,7 @@ class MeshInterface:
         *,
         want_ack: bool = False,
         channel_index: int | None = None,
-        priority: Optional[MeshPacket.Priority] = None,  # noqa: UP007
+        priority: MeshPacket.Priority | None = None,
     ) -> None:
         if isinstance(destination, MeshNode):
             to_node = destination.id

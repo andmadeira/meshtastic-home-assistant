@@ -1,6 +1,10 @@
+# SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+#
+# SPDX-License-Identifier: MIT
+
 from collections.abc import Mapping
 from functools import cached_property
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 import google
 
@@ -40,7 +44,7 @@ class Packet[T]:
         return self.mesh_packet.decoded if self.mesh_packet and self.mesh_packet.HasField("decoded") else None
 
     @property
-    def port_num(self) -> Optional[portnums_pb2.PortNum]:  # noqa: UP007
+    def port_num(self) -> portnums_pb2.PortNum | None:
         return self.data.portnum if self.data is not None else None
 
     @property
@@ -107,7 +111,7 @@ class FullNodeInfoPacket(Packet[mesh_pb2.NodeInfo]):
         super().__init__(packet)
 
     @property
-    def port_num(self) -> Optional[portnums_pb2.PortNum]:  # noqa: UP007
+    def port_num(self) -> portnums_pb2.PortNum | None:
         return portnums_pb2.PortNum.NODEINFO_APP
 
     @cached_property

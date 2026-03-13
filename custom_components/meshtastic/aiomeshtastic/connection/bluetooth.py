@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+# SPDX-FileCopyrightText: 2025 Hendrik @novag
+#
+# SPDX-License-Identifier: MIT
+
 import asyncio
 import struct
 from collections.abc import AsyncGenerator
