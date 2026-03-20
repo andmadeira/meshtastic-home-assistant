@@ -190,13 +190,13 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
                     domain_event_data[CONF_ENTITY_ID] = to_dm_entity_id
                 hass.bus.async_fire(event_type=EVENT_MESHTASTIC_DOMAIN_EVENT, event_data=domain_event_data)
 
-        via_mqtt = data["via_mqtt"]
-        rx_snr = data["rx_snr"]
-        rx_rssi = data["rx_rssi"]
-        hop_start = data["hop_start"]
-        hop_limit = data["hop_limit"]
-
         if produce_log_event and (to_dm_entity_id or to_channel_entity_id):
+            via_mqtt = data["via_mqtt"]
+            rx_snr = data["rx_snr"]
+            rx_rssi = data["rx_rssi"]
+            hop_start = data["hop_start"]
+            hop_limit = data["hop_limit"]
+
             _publish_message_log_event(
                 hass,
                 entry,
