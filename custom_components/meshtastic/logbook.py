@@ -32,8 +32,13 @@ from .const import (
     EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE,
     EVENT_MESHTASTIC_DOMAIN_MESSAGE_LOG,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME,
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_HOP_LIMIT,
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_HOP_START,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI,
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_RSSI,
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_SNR,
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_VIA_MQTT,
     MeshtasticDomainEventData,
     MeshtasticDomainEventType,
     MeshtasticDomainMessageLogEventData,
@@ -99,6 +104,11 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
         to_channel_entity_id: str,
         to_dm_entity_id: str,
         message: str,
+        via_mqtt: int,
+        rx_snr: float,
+        rx_rssi: int,
+        hop_start: int,
+        hop_limit: int,
     ) -> None:
         if (node_info := entry.runtime_data.client.get_node_info(int(from_node_id))) is not None:
             from_name = f"{node_info.long_name} ({node_info.user_id})"
@@ -110,6 +120,11 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME: from_name,
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI: bool(to_dm_entity_id),
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE: message,
+            EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_VIA_MQTT: bool(via_mqtt),
+            EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_SNR: rx_snr,
+            EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_RSSI: rx_rssi,
+            EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_HOP_START: hop_start,
+            EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_HOP_LIMIT: hop_limit,
         }
         hass.bus.async_fire(event_type=EVENT_MESHTASTIC_DOMAIN_MESSAGE_LOG, event_data=message_log_event_data)
 
@@ -163,6 +178,12 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
 
                 hass.bus.async_fire(event_type=EVENT_MESHTASTIC_DOMAIN_EVENT, event_data=domain_event_data)
 
+        via_mqtt = data["via_mqtt"]
+        rx_snr = data["rx_snr"]
+        rx_rssi = data["rx_rssi"]
+        hop_start = data["hop_start"]
+        hop_limit = data["hop_limit"]
+
         if produce_log_event and (to_dm_entity_id or to_channel_entity_id):
             _publish_message_log_event(
                 hass,
@@ -172,6 +193,11 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
                 to_channel_entity_id,
                 to_dm_entity_id,
                 message,
+                via_mqtt,
+                rx_snr,
+                rx_rssi,
+                hop_start,
+                hop_limit,
             )
 
     def extract_device_and_entity_from_channel(

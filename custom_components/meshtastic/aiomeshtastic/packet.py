@@ -28,8 +28,16 @@ class Packet[T]:
         return self.mesh_packet.rx_time if self.mesh_packet is not None else None
 
     @property
+    def via_mqtt(self) -> bool | None:
+        return self.mesh_packet.via_mqtt if self.mesh_packet is not None else None
+
+    @property
     def rx_snr(self) -> float | None:
         return self.mesh_packet.rx_snr if self.mesh_packet is not None else None
+
+    @property
+    def rx_rssi(self) -> int | None:
+        return self.mesh_packet.rx_rssi if self.mesh_packet is not None else None
 
     @property
     def to_id(self) -> int | None:
