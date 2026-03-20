@@ -170,7 +170,7 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
             config_entry_id, gateway_node_id, to, to_device
         )
         message = data["message"]
-        message_id = event_data["message_id"],
+        message_id = event_data["message_id"]
 
         if produce_domain_event:
             if from_device:
