@@ -39,6 +39,7 @@ from .const import (
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_HOP_LIMIT,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_HOP_START,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE,
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE_ID,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_RSSI,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_SNR,
@@ -108,6 +109,7 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
         to_channel_entity_id: str,
         to_dm_entity_id: str,
         message: str,
+        message_id: int,
         via_mqtt: int,
         rx_snr: float,
         rx_rssi: int,
@@ -124,6 +126,7 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME: from_name,
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI: bool(to_dm_entity_id),
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE: message,
+            EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE_ID: message_id,
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_VIA_MQTT: bool(via_mqtt),
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_SNR: rx_snr,
             EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_RSSI: rx_rssi,
@@ -167,6 +170,7 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
             config_entry_id, gateway_node_id, to, to_device
         )
         message = data["message"]
+        message_id = event_data["message_id"],
 
         if produce_domain_event:
             if from_device:
@@ -205,6 +209,7 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
                 to_channel_entity_id,
                 to_dm_entity_id,
                 message,
+                message_id,
                 via_mqtt,
                 rx_snr,
                 rx_rssi,

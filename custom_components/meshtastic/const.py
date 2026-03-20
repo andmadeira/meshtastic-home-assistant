@@ -116,6 +116,7 @@ EVENT_MESHTASTIC_DOMAIN_EVENT: EventType[MeshtasticDomainEventData] = EventType(
 EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME: Final = "from_name"
 EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI: Final = "pki"
 EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE: Final = "message"
+EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE_ID: Final = "message_id"
 
 EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_VIA_MQTT: Final = "via_mqtt"
 EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_RX_SNR: Final = "rx_snr"
@@ -128,6 +129,7 @@ class MeshtasticDomainMessageLogEventData(TypedDict):
     device_id: str
     entity_id: str
     message: str
+    message_id: int
     from_name: str
     pki: bool
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_VIA_MQTT: bool
