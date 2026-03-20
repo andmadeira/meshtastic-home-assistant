@@ -180,7 +180,7 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
                 rx_snr,
                 rx_rssi,
                 hop_start,
-                hop_limit
+                hop_limit,
             )
 
     def extract_device_and_entity_from_channel(
