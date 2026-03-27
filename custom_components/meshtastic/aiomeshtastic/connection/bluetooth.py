@@ -10,7 +10,8 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 import bleak
-from bleak import BaseBleakClient, BleakClient, BleakGATTCharacteristic
+from bleak import BaseBleakClient, BleakGATTCharacteristic
+from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 from google.protobuf import message
 
 from ..protobuf import mesh_pb2  # noqa: TID252
@@ -55,37 +56,33 @@ class BluetoothConnection(ClientApiConnection):
         self._write_lock = asyncio.Lock()
         self._last_packet_number = None
         self._force_read_event = asyncio.Event()
+        self._notify_started = False
+        self._notify_lock = asyncio.Lock()
 
     async def _connect(self) -> None:
-        self._bleak_client = BleakClient(
-            self._ble_address, timeout=self._connect_timeout, backend=self._bleak_client_backend
+        device = self._ble_device or self._ble_address
+
+        self._bleak_client = await establish_connection(
+            BleakClientWithServiceCache,
+            device,
+            self._ble_address,
+            timeout=self._connect_timeout,
+            disconnected_callback=None,
+            max_attempts=3,
+            pair=True,
+            backend=self._bleak_client_backend,
         )
-        await self._bleak_client.connect()
 
-        # attempt pairing, we don't know if it is required. Should not harm if
-        # not needed. if pairing is required, external input is necessary as we are not
-        # able to fully pair with bleak see https://github.com/hbldh/bleak/issues/1434.
-        # possible workaround: https://technotes.kynetics.com/2018/pairing_agents_bluez/
-        try:
-            await self._bleak_client.pair()
-        except:  # noqa: E722
-            self._logger.debug("Pairing failed", exc_info=True)
-
-        self._ble_meshtastic_service = self._bleak_client.services[BluetoothConnection.BTM_SERVICE_UUID]
+        services = self._bleak_client.services
+        self._ble_meshtastic_service = services.get_service(self.BTM_SERVICE_UUID)
 
         if self._ble_meshtastic_service is None:
-            raise BluetoothConnectionServiceNotFoundError
+            raise BluetoothConnectionServiceNotFoundError()
 
-        self._ble_from_radio = self._ble_meshtastic_service.get_characteristic(
-            BluetoothConnection.BTM_CHARACTERISTIC_FROM_RADIO_UUID
-        )
-        self._ble_to_radio = self._ble_meshtastic_service.get_characteristic(
-            BluetoothConnection.BTM_CHARACTERISTIC_TO_RADIO_UUID
-        )
-        self._ble_from_num = self._ble_meshtastic_service.get_characteristic(
-            BluetoothConnection.BTM_CHARACTERISTIC_FROM_NUM_UUID
-        )
-        self._ble_log = self._ble_meshtastic_service.get_characteristic(BluetoothConnection.BTM_CHARACTERISTIC_LOG_UUID)
+        self._ble_from_radio = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_FROM_RADIO_UUID)
+        self._ble_to_radio = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_TO_RADIO_UUID)
+        self._ble_from_num = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_FROM_NUM_UUID)
+        self._ble_log = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_LOG_UUID)
 
     async def _disconnect(self) -> None:
         try:
@@ -167,20 +164,41 @@ class BluetoothConnection(ClientApiConnection):
         try:
 
             async def start_notify() -> None:
-                await asyncio.wait_for(
-                    self._bleak_client.start_notify(self._ble_from_num, notification_handler), timeout=30
-                )
+                async with self._notify_lock:
+                    if self._notify_started:
+                        return
+                    await asyncio.wait_for(
+                        self._bleak_client.start_notify(self._ble_from_num, notification_handler),
+                        timeout=30,
+                    )
+                    self._notify_started = True
 
             async def stop_notify() -> None:
-                await asyncio.wait_for(self._bleak_client.stop_notify(self._ble_from_num), timeout=30)
+                async with self._notify_lock:
+                    if not self._notify_started:
+                        return
+                    await asyncio.wait_for(
+                        self._bleak_client.stop_notify(self._ble_from_num),
+                        timeout=30,
+                    )
+                    self._notify_started = False
 
             async def restart_notify() -> None:
-                try:
-                    with suppress(Exception):
-                        await stop_notify()
-                    await start_notify()
-                except:  # noqa: E722
-                    self._logger.debug("Restart notify failed", exc_info=True)
+                async with self._notify_lock:
+                    try:
+                        if self._notify_started:
+                            with suppress(Exception):
+                                await asyncio.wait_for(self._bleak_client.stop_notify(self._ble_from_num), timeout=30)
+                            self._notify_started = False
+
+                        await asyncio.wait_for(
+                            self._bleak_client.start_notify(self._ble_from_num, notification_handler),
+                            timeout=30,
+                        )
+                        self._notify_started = True
+                    except Exception:
+                        self._logger.debug("Restart notify failed", exc_info=True)
+                        raise
 
             await start_notify()
 
