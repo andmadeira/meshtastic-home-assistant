@@ -46,6 +46,7 @@ class BluetoothConnection(ClientApiConnection):
     ) -> None:
         super().__init__()
         self._ble_address = ble_address
+        self._ble_device = ble_device
         self._bleak_client_backend = bleak_client_backend
         self._connect_timeout = connect_timeout
         self._ble_meshtastic_service: BleakGATTService | None = None
