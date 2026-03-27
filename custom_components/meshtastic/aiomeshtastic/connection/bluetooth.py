@@ -10,6 +10,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 import bleak
+from bleak.backends.device import BLEDevice
 from bleak import BaseBleakClient, BleakGATTCharacteristic
 from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 from google.protobuf import message
@@ -42,7 +43,11 @@ class BluetoothConnection(ClientApiConnection):
     BTM_CHARACTERISTIC_LOG_UUID = "5a3d6e49-06e6-4423-9944-e9de8cdf9547"
 
     def __init__(
-        self, ble_address: str, bleak_client_backend: type[BaseBleakClient] | None = None, connect_timeout: float = 10.0
+        self,
+        ble_address: str,
+        ble_device: BLEDevice | None = None,
+        bleak_client_backend: type[BaseBleakClient] | None = None,
+        connect_timeout: float = 10.0,
     ) -> None:
         super().__init__()
         self._ble_address = ble_address
