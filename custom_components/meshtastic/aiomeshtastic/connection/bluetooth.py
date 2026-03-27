@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import bleak
 from bleak.backends.device import BLEDevice
-from bleak import BaseBleakClient, BleakGATTCharacteristic
+from bleak import BaseBleakClient, BleakGATTCharacteristic, BleakScanner
 from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 from google.protobuf import message
 
@@ -66,12 +66,23 @@ class BluetoothConnection(ClientApiConnection):
         self._notify_lock = asyncio.Lock()
 
     async def _connect(self) -> None:
-        device = self._ble_device or self._ble_address
+        device: BLEDevice | None = self._ble_device
+
+        if device is None:
+            device = await BleakScanner.find_device_by_address(
+                self._ble_address,
+                timeout=self._connect_timeout,
+            )
+
+        if device is None:
+            raise BluetoothConnectionDeviceNotFoundError(self._ble_address)
+
+        self._ble_device = device
 
         self._bleak_client = await establish_connection(
             BleakClientWithServiceCache,
             device,
-            self._ble_address,
+            device.name or self._ble_address,
             timeout=self._connect_timeout,
             disconnected_callback=None,
             max_attempts=3,
