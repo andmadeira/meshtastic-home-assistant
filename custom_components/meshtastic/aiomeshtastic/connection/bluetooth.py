@@ -15,6 +15,9 @@ from bleak import BaseBleakClient, BleakGATTCharacteristic, BleakScanner
 from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 from google.protobuf import message
 
+from habluetooth import BluetoothServiceInfoBleak
+from homeassistant.components.bluetooth import async_ble_device_from_address
+
 from ..protobuf import mesh_pb2  # noqa: TID252
 from . import ClientApiConnection
 from .errors import (
@@ -69,10 +72,7 @@ class BluetoothConnection(ClientApiConnection):
         device: BLEDevice | None = self._ble_device
 
         if device is None:
-            device = await BleakScanner.find_device_by_address(
-                self._ble_address,
-                timeout=self._connect_timeout,
-            )
+            device = async_ble_device_from_address(self.hass, self._ble_address, connectable=True)
 
         if device is None:
             raise BluetoothConnectionDeviceNotFoundError(self._ble_address)
@@ -81,13 +81,11 @@ class BluetoothConnection(ClientApiConnection):
 
         self._bleak_client = await establish_connection(
             BleakClientWithServiceCache,
-            device,
-            device.name or self._ble_address,
+            ble_device,
+            ble_device.name or self._ble_address,
             timeout=self._connect_timeout,
-            disconnected_callback=None,
             max_attempts=3,
             pair=True,
-            backend=self._bleak_client_backend,
         )
 
         services = self._bleak_client.services
