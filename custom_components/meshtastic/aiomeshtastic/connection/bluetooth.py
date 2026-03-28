@@ -9,15 +9,16 @@ from collections.abc import AsyncGenerator
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-import bleak
+from bleak import BleakScanner
+from bleak.backends.characteristic import BleakGATTCharacteristic
+from bleak.backends.client import BaseBleakClient
 from bleak.backends.device import BLEDevice
-from bleak import BaseBleakClient, BleakGATTCharacteristic, BleakScanner
-from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
-from google.protobuf import message
-
-from habluetooth import BluetoothServiceInfoBleak
+from bleak.backends.service import BleakGATTService
+from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 from homeassistant.components.bluetooth import async_ble_device_from_address
+from homeassistant.core import HomeAssistant
 
+from google.protobuf import message
 from ..protobuf import mesh_pb2  # noqa: TID252
 from . import ClientApiConnection
 from .errors import (
@@ -47,57 +48,91 @@ class BluetoothConnection(ClientApiConnection):
 
     def __init__(
         self,
+        hass: HomeAssistant,
         ble_address: str,
         ble_device: BLEDevice | None = None,
         bleak_client_backend: type[BaseBleakClient] | None = None,
         connect_timeout: float = 10.0,
     ) -> None:
         super().__init__()
+        self._hass = hass
         self._ble_address = ble_address
         self._ble_device = ble_device
         self._bleak_client_backend = bleak_client_backend
         self._connect_timeout = connect_timeout
+
+        self._bleak_client = None
         self._ble_meshtastic_service: BleakGATTService | None = None
-        self._ble_from_radio: BleakGATTCharacteristic | None
-        self._ble_to_radio: BleakGATTCharacteristic | None
-        self._ble_from_num: BleakGATTCharacteristic | None
-        self._ble_log: BleakGATTCharacteristic | None
+        self._ble_from_radio: BleakGATTCharacteristic | None = None
+        self._ble_to_radio: BleakGATTCharacteristic | None = None
+        self._ble_from_num: BleakGATTCharacteristic | None = None
+        self._ble_log: BleakGATTCharacteristic | None = None
+
         self._write_lock = asyncio.Lock()
+        self._connect_lock = asyncio.Lock()
         self._last_packet_number = None
         self._force_read_event = asyncio.Event()
         self._notify_started = False
         self._notify_lock = asyncio.Lock()
 
     async def _connect(self) -> None:
-        device: BLEDevice | None = self._ble_device
+        async with self._connect_lock:
+            if self._bleak_client and self._bleak_client.is_connected:
+                return
 
-        if device is None:
-            device = async_ble_device_from_address(self.hass, self._ble_address, connectable=True)
+            device: BLEDevice | None = self._ble_device
 
-        if device is None:
-            raise BluetoothConnectionDeviceNotFoundError(self._ble_address)
+            # 1) Preferir o BLEDevice já conhecido pelo Home Assistant
+            if device is None:
+                device = async_ble_device_from_address(
+                    self._hass,
+                    self._ble_address,
+                    connectable=True,
+                )
 
-        self._ble_device = device
+            # 2) Fallback para scan direto apenas se o HA não o tiver em cache
+            if device is None:
+                device = await BleakScanner.find_device_by_address(
+                    self._ble_address,
+                    timeout=self._connect_timeout,
+                )
 
-        self._bleak_client = await establish_connection(
-            BleakClientWithServiceCache,
-            ble_device,
-            ble_device.name or self._ble_address,
-            timeout=self._connect_timeout,
-            max_attempts=3,
-            pair=True,
-        )
+            if device is None:
+                raise BluetoothConnectionDeviceNotFoundError(self._ble_address)
 
-        services = self._bleak_client.services
-        self._ble_meshtastic_service = services.get_service(self.BTM_SERVICE_UUID)
+            self._ble_device = device
 
-        if self._ble_meshtastic_service is None:
-            raise BluetoothConnectionServiceNotFoundError()
+            self._bleak_client = await establish_connection(
+                BleakClientWithServiceCache,
+                device,
+                device.name or self._ble_address,
+                disconnected_callback=None,
+                timeout=self._connect_timeout,
+                max_attempts=3,
+                pair=True,
+                backend=self._bleak_client_backend,
+            )
 
-        self._ble_from_radio = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_FROM_RADIO_UUID)
-        self._ble_to_radio = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_TO_RADIO_UUID)
-        self._ble_from_num = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_FROM_NUM_UUID)
-        self._ble_log = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_LOG_UUID)
+            services = self._bleak_client.services
+            self._ble_meshtastic_service = services.get_service(self.BTM_SERVICE_UUID)
+
+            if self._ble_meshtastic_service is None:
+                raise BluetoothConnectionServiceNotFoundError()
+
+            self._ble_from_radio = self._ble_meshtastic_service.get_characteristic(
+                self.BTM_CHARACTERISTIC_FROM_RADIO_UUID
+            )
+            self._ble_to_radio = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_TO_RADIO_UUID)
+            self._ble_from_num = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_FROM_NUM_UUID)
+            self._ble_log = self._ble_meshtastic_service.get_characteristic(self.BTM_CHARACTERISTIC_LOG_UUID)
+
+            if (
+                self._ble_from_radio is None
+                or self._ble_to_radio is None
+                or self._ble_from_num is None
+                or self._ble_log is None
+            ):
+                raise BluetoothConnectionServiceNotFoundError()
 
     async def _disconnect(self) -> None:
         try:
