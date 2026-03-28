@@ -42,6 +42,11 @@ class BluetoothConnectionServiceNotFoundError:
         super().__init__("Bluetooth meshtastic service not found")
 
 
+class BluetoothConnectionDeviceNotFoundError:
+    def __init__(self, ble_address: str) -> None:
+        super().__init__("Bluetooth meshtastic device %s not found", ble_address)
+
+
 class BluetoothConnection(ClientApiConnection):
     BTM_SERVICE_UUID = "6ba1b218-15a8-461f-9fa8-5dcae273eafd"
     BTM_CHARACTERISTIC_FROM_RADIO_UUID = "2c55e69e-4993-11ed-b878-0242ac120002"
@@ -234,7 +239,6 @@ class BluetoothConnection(ClientApiConnection):
                         timeout=30,
                     )
                     self._notify_started = True
-
 
             async def stop_notify() -> None:
                 async with self._notify_lock:
