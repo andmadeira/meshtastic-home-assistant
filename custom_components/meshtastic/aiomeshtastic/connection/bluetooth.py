@@ -5,7 +5,7 @@
 
 import asyncio
 import struct
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
@@ -37,14 +37,14 @@ class BluetoothConnectionError(ClientApiConnectionError):
     pass
 
 
-class BluetoothConnectionServiceNotFoundError:
+class BluetoothConnectionServiceNotFoundError(BluetoothConnectionError):
     def __init__(self) -> None:
         super().__init__("Bluetooth meshtastic service not found")
 
 
-class BluetoothConnectionDeviceNotFoundError:
+class BluetoothConnectionDeviceNotFoundError(BluetoothConnectionError):
     def __init__(self, ble_address: str) -> None:
-        super().__init__("Bluetooth meshtastic device %s not found", ble_address)
+        super().__init__(f"Bluetooth meshtastic device {ble_address} not found")
 
 
 class BluetoothConnection(ClientApiConnection):
@@ -143,15 +143,26 @@ class BluetoothConnection(ClientApiConnection):
                 raise BluetoothConnectionServiceNotFoundError()
 
     async def _disconnect(self) -> None:
+        if self._bleak_client is None:
+            self._notify_started = False
+            return
+
         try:
             await self._bleak_client.disconnect()
-            self._notify_started = False
         except:  # noqa: E722
             self._logger.debug("Disconnecting failed", exc_info=True)
+        finally:
+            self._notify_started = False
+            self._bleak_client = None
+            self._ble_meshtastic_service = None
+            self._ble_from_radio = None
+            self._ble_to_radio = None
+            self._ble_from_num = None
+            self._ble_log = None
 
     @property
     def is_connected(self) -> bool:
-        return self._bleak_client.is_connected
+        return self._bleak_client is not None and self._bleak_client.is_connected
 
     async def _handle_notify_wait(  # noqa: PLR0913
         self,
@@ -160,7 +171,7 @@ class BluetoothConnection(ClientApiConnection):
         notify_timeout_duration: int,
         notify_timeout_count: int,
         max_notify_timeouts_before_restart: int,
-        restart_notify_func: callable,
+        restart_notify_func: Callable[[], Awaitable[None]],
     ) -> tuple[bool, int]:
         """Wait for packet notification or force read event."""
         wait_notify = asyncio.create_task(packet_num_queue.get(), name="wait_notify")
@@ -194,7 +205,7 @@ class BluetoothConnection(ClientApiConnection):
                 self._logger.debug(
                     "No bluetooth notification for %d times after %ds timeout, restarting notifications",
                     notify_timeout_count,
-                    max_notify_timeouts_before_restart,
+                    notify_timeout_duration,
                 )
                 notify_timeout_count = 0
                 await restart_notify_func()
@@ -269,16 +280,15 @@ class BluetoothConnection(ClientApiConnection):
                                 timeout=10,
                             )
                         self._notify_started = False
-
-            await asyncio.wait_for(
-                self._bleak_client.start_notify(
-                    self._ble_from_num,
-                    notification_handler,
-                    bluez=BlueZStartNotifyArgs(use_start_notify=True),
-                ),
-                timeout=30,
-            )
-            self._notify_started = True
+                    await asyncio.wait_for(
+                        self._bleak_client.start_notify(
+                            self._ble_from_num,
+                            notification_handler,
+                            bluez=BlueZStartNotifyArgs(use_start_notify=True),
+                        ),
+                        timeout=30,
+                    )
+                    self._notify_started = True
 
             await start_notify()
 
@@ -321,11 +331,11 @@ class BluetoothConnection(ClientApiConnection):
         except BleakError as e:
             raise BluetoothConnectionError from e
         finally:
-            with suppress(BleakError):
-                await self._bleak_client.stop_notify(self._ble_from_num)
+            with suppress(BleakError, BleakDBusError, RuntimeError, TimeoutError):
+                await stop_notify()
 
     async def _send_packet(self, data: bytes) -> bool:
-        if not self._bleak_client.is_connected:
+        if self._bleak_client is None or self._ble_to_radio is None or not self._bleak_client.is_connected:
             raise ClientApiNotConnectedError
 
         # Check if this packet requires a forced read
