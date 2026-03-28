@@ -10,11 +10,13 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 import bleak
-from bleak import BleakScanner
+from bleak import BleakScanner, BleakError
+from bleak.args.bluez import BlueZStartNotifyArgs
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.client import BaseBleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.service import BleakGATTService
+from bleak.exc import BleakDBusError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 from homeassistant.components.bluetooth import async_ble_device_from_address
 from homeassistant.core import HomeAssistant
@@ -138,6 +140,7 @@ class BluetoothConnection(ClientApiConnection):
     async def _disconnect(self) -> None:
         try:
             await self._bleak_client.disconnect()
+            self._notify_started = False
         except:  # noqa: E722
             self._logger.debug("Disconnecting failed", exc_info=True)
 
@@ -218,38 +221,60 @@ class BluetoothConnection(ClientApiConnection):
                 async with self._notify_lock:
                     if self._notify_started:
                         return
+
+                    if self._bleak_client is None or self._ble_from_num is None:
+                        raise RuntimeError("BLE client or characteristic not initialized")
+
                     await asyncio.wait_for(
-                        self._bleak_client.start_notify(self._ble_from_num, notification_handler),
+                        self._bleak_client.start_notify(
+                            self._ble_from_num,
+                            notification_handler,
+                            bluez=BlueZStartNotifyArgs(use_start_notify=True),
+                        ),
                         timeout=30,
                     )
                     self._notify_started = True
+
 
             async def stop_notify() -> None:
                 async with self._notify_lock:
                     if not self._notify_started:
                         return
-                    await asyncio.wait_for(
-                        self._bleak_client.stop_notify(self._ble_from_num),
-                        timeout=30,
-                    )
+
+                    if self._bleak_client is None or self._ble_from_num is None:
+                        self._notify_started = False
+                        return
+
+                    with suppress(bleak.BleakError, BleakDBusError, TimeoutError):
+                        await asyncio.wait_for(
+                            self._bleak_client.stop_notify(self._ble_from_num),
+                            timeout=10,
+                        )
+
                     self._notify_started = False
 
             async def restart_notify() -> None:
                 async with self._notify_lock:
-                    try:
-                        if self._notify_started:
-                            with suppress(Exception):
-                                await asyncio.wait_for(self._bleak_client.stop_notify(self._ble_from_num), timeout=30)
-                            self._notify_started = False
+                    if self._bleak_client is None or self._ble_from_num is None:
+                        raise RuntimeError("BLE client or characteristic not initialized")
 
-                        await asyncio.wait_for(
-                            self._bleak_client.start_notify(self._ble_from_num, notification_handler),
-                            timeout=30,
-                        )
-                        self._notify_started = True
-                    except Exception:
-                        self._logger.debug("Restart notify failed", exc_info=True)
-                        raise
+                    if self._notify_started:
+                        with suppress(bleak.BleakError, BleakDBusError, TimeoutError):
+                            await asyncio.wait_for(
+                                self._bleak_client.stop_notify(self._ble_from_num),
+                                timeout=10,
+                            )
+                        self._notify_started = False
+
+            await asyncio.wait_for(
+                self._bleak_client.start_notify(
+                    self._ble_from_num,
+                    notification_handler,
+                    bluez=BlueZStartNotifyArgs(use_start_notify=True),
+                ),
+                timeout=30,
+            )
+            self._notify_started = True
 
             await start_notify()
 
@@ -289,10 +314,10 @@ class BluetoothConnection(ClientApiConnection):
                     yield from_radio
                 except message.DecodeError:
                     self._logger.warning("Error while parsing FromRadio bytes %s", packet, exc_info=True)
-        except bleak.BleakError as e:
+        except BleakError as e:
             raise BluetoothConnectionError from e
         finally:
-            with suppress(bleak.BleakError):
+            with suppress(BleakError):
                 await self._bleak_client.stop_notify(self._ble_from_num)
 
     async def _send_packet(self, data: bytes) -> bool:
