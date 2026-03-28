@@ -18,16 +18,10 @@ from google.protobuf.json_format import MessageToDict
 from homeassistant.exceptions import IntegrationError
 
 from .aiomeshtastic import (
-    BluetoothConnection as AioBluetoothConnection,
-)
-from .aiomeshtastic import (
     MeshInterface,
 )
 from .aiomeshtastic import (
     MeshInterface as AioMeshInterface,
-)
-from .aiomeshtastic import (
-    SerialConnection as AioSerialConnection,
 )
 from .aiomeshtastic import (
     TcpConnection as AioTcpConnection,
@@ -110,8 +104,12 @@ class MeshtasticApiClient:
         if connection_type == ConnectionType.TCP.value:
             connection = AioTcpConnection(host=data[CONF_CONNECTION_TCP_HOST], port=data[CONF_CONNECTION_TCP_PORT])
         elif connection_type == ConnectionType.BLUETOOTH.value:
+            from .aiomeshtastic.connection.bluetooth import BluetoothConnection as AioBluetoothConnection
+
             connection = AioBluetoothConnection(hass=hass, ble_address=data[CONF_CONNECTION_BLUETOOTH_ADDRESS])
         elif connection_type == ConnectionType.SERIAL.value:
+            from .aiomeshtastic.connection.serial import SerialConnection as AioSerialConnection
+
             connection = AioSerialConnection(device=data[CONF_CONNECTION_SERIAL_PORT])
         else:
             msg = f"Unsupported connection type {connection_type}"
