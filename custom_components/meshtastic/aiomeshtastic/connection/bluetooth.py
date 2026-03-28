@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 import bleak
 from bleak import BleakScanner, BleakError
-from bleak.args.bluez import BlueZStartNotifyArgs
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.client import BaseBleakClient
 from bleak.backends.device import BLEDevice
@@ -28,6 +27,14 @@ from .errors import (
     ClientApiConnectionError,
     ClientApiNotConnectedError,
 )
+
+try:
+    from bleak.args.bluez import BlueZStartNotifyArgs
+except ImportError:
+    try:
+        from bleak.args.bluez import BlueZNotifyArgs as BlueZStartNotifyArgs
+    except ImportError:
+        BlueZStartNotifyArgs = None
 
 if TYPE_CHECKING:
     from bleak.backends.service import BleakGATTService
@@ -53,6 +60,19 @@ class BluetoothConnection(ClientApiConnection):
     BTM_CHARACTERISTIC_TO_RADIO_UUID = "f75c76d2-129e-4dad-a1dd-7866124401e7"
     BTM_CHARACTERISTIC_FROM_NUM_UUID = "ed9da18c-a800-4f66-a670-aa7547e34453"
     BTM_CHARACTERISTIC_LOG_UUID = "5a3d6e49-06e6-4423-9944-e9de8cdf9547"
+
+    @staticmethod
+    def _start_notify_kwargs() -> dict[str, Any]:
+        if BlueZStartNotifyArgs is None:
+            return {}
+
+        try:
+            return {"bluez": BlueZStartNotifyArgs(use_start_notify=True)}
+        except TypeError:
+            try:
+                return {"bluez": BlueZStartNotifyArgs()}
+            except TypeError:
+                return {}
 
     def __init__(
         self,
@@ -245,7 +265,7 @@ class BluetoothConnection(ClientApiConnection):
                         self._bleak_client.start_notify(
                             self._ble_from_num,
                             notification_handler,
-                            bluez=BlueZStartNotifyArgs(use_start_notify=True),
+                            **self._start_notify_kwargs(),
                         ),
                         timeout=30,
                     )
@@ -284,7 +304,7 @@ class BluetoothConnection(ClientApiConnection):
                         self._bleak_client.start_notify(
                             self._ble_from_num,
                             notification_handler,
-                            bluez=BlueZStartNotifyArgs(use_start_notify=True),
+                            **self._start_notify_kwargs(),
                         ),
                         timeout=30,
                     )
